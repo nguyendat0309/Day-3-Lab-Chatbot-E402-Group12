@@ -32,5 +32,24 @@ class PerformanceTracker:
         """
         return (usage.get("total_tokens", 0) / 1000) * 0.01
 
+    def track_step(self, step: int, phase: str, provider: str, latency_ms: int):
+        """
+        Tracks per-step latency for trace comparison between providers.
+
+        Args:
+            step: Step number in the ReAct loop.
+            phase: "thought" or "tool_call".
+            provider: "claude" or "openai".
+            latency_ms: Time taken for this phase in milliseconds.
+        """
+        metric = {
+            "step": step,
+            "phase": phase,
+            "provider": provider,
+            "latency_ms": latency_ms
+        }
+        self.session_metrics.append(metric)
+        logger.log_event("STEP_LATENCY", metric)
+
 # Global tracker instance
 tracker = PerformanceTracker()
