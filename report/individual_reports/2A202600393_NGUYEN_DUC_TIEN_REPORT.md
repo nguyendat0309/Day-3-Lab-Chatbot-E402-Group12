@@ -2,6 +2,7 @@
 
 **Họ và tên:** Nguyễn Đức Tiến
 **MSSV:** 2A202600393
+**Github:** ductiens
 **Nhiệm vụ đảm nhiệm:** Xây dựng ReAct Agent 
 
 ---
