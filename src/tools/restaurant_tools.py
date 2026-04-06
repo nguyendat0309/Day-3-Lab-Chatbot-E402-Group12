@@ -17,18 +17,29 @@ def load_data() -> List[Dict[str, Any]]:
 
 RESTAURANTS = load_data()
 
-def search_restaurants(cuisine: str = None, district: str = None, max_price: int = None, min_rating: float = None) -> str:
+def search_restaurants(
+    cuisine: str = None,
+    district: str = None,
+    max_price: int = None,
+    min_rating: float = None,
+    dish_type: str = None,
+    ambiance: str = None,
+    amenity: str = None
+) -> str:
     """
     Search for a list of restaurants based on filter criteria. Very useful when the user asks to "find an X restaurant in area Y".
-    
+
     Args:
         cuisine (str, optional): Type of cuisine (e.g., "vietnamese", "french", "japanese", "korean", "italian", "seafood", "vegetarian").
-        district (str, optional): District in Hanoi (e.g., "Cầu Giấy", "Tây Hồ", "Đống Đa", "Hoàn Kiếm").
+        district (str, optional): District in Hanoi (e.g., "Cầu Giấy", "Tây Hồ", "Đống Đa", "Hoàn Kiếm", "Ba Đình", "Hai Bà Trưng", "Thanh Xuân", "Nam Từ Liêm", "Hà Đông").
         max_price (int, optional): Maximum average price per person in VND.
         min_rating (float, optional): Minimum rating score (e.g., 4.0, 4.5).
-        
+        dish_type (str, optional): Specific dish type (e.g., "phở", "bún_chả", "sushi", "bbq", "buffet", "fine_dining", "casual_dining", "cơm").
+        ambiance (str, optional): Atmosphere of the restaurant (e.g., "romantic", "casual", "elegant", "cozy_indoor", "street_food_style").
+        amenity (str, optional): A required facility (e.g., "wifi", "parking", "live_music", "outdoor_seating", "air_conditioning").
+
     Returns:
-        str: A JSON string containing a list of matched restaurants (includes name, id, cuisine, district, price_avg, rating). Returns an error message if none found.
+        str: A JSON string containing a list of matched restaurants (includes name, id, cuisine, dish_type, district, price_avg, rating, ambiance). Returns an error message if none found.
     """
     results = RESTAURANTS
     if cuisine:
@@ -39,19 +50,27 @@ def search_restaurants(cuisine: str = None, district: str = None, max_price: int
         results = [r for r in results if r.get('price_avg', float('inf')) <= max_price]
     if min_rating is not None:
         results = [r for r in results if r.get('rating', 0.0) >= min_rating]
-        
+    if dish_type:
+        results = [r for r in results if r.get('dish_type', '').lower() == dish_type.lower()]
+    if ambiance:
+        results = [r for r in results if r.get('ambiance', '').lower() == ambiance.lower()]
+    if amenity:
+        results = [r for r in results if amenity.lower() in [a.lower() for a in r.get('amenities', [])]]
+
     if not results:
         return json.dumps({"error": "Could not find any restaurants matching these criteria."}, ensure_ascii=False)
-        
+
     # Drop detailed info to save LLM context window tokens
     simplified_results = [
         {
             "id": r["id"],
             "name": r["name"],
             "cuisine": r["cuisine"],
+            "dish_type": r.get("dish_type", ""),
             "district": r["district"],
             "price_avg": r["price_avg"],
-            "rating": r["rating"]
+            "rating": r["rating"],
+            "ambiance": r.get("ambiance", "")
         } for r in results
     ]
     return json.dumps(simplified_results, ensure_ascii=False)
