@@ -114,22 +114,137 @@ Số liệu lấy trực tiếp từ `logs/2026-04-06.log` — 5 query chatbot (
 
 ---
 
+### Case Study 1: Agent loop vô hạn khi query ngoài scope — "Gợi ý món khi ăn bún bò lần đầu?"
+
+**Input**: "Gợi ý món khi ăn bún bò lần đầu?"
+
+**Observation**: LLM nhận ra câu hỏi ngoài scope nhưng chỉ viết text thuần — không dùng `Final Answer:` và không có `Action:`. Parser regex không tìm thấy pattern nào → `AGENT_PARSE_ERROR` × 5 → đạt `max_steps`, trả về fallback rỗng.
+
+**Trace từ log (2026-04-06):**
+
+```json
+{"event": "AGENT_RUN_START",   "data": {"input": "Gợi ý món khi ăn bún bò lần đầu?", "model": "gpt-4o"}}
+{"event": "LLM_METRIC",        "data": {"latency_ms": 969,  "total_tokens": 1594}}
+{"event": "AGENT_PARSE_ERROR", "data": {"error": "No Action found", "step": 1}}
+{"event": "LLM_METRIC",        "data": {"latency_ms": 806,  "total_tokens": 1594}}
+{"event": "AGENT_PARSE_ERROR", "data": {"error": "No Action found", "step": 2}}
+{"event": "LLM_METRIC",        "data": {"latency_ms": 885,  "total_tokens": 1594}}
+{"event": "AGENT_PARSE_ERROR", "data": {"error": "No Action found", "step": 3}}
+{"event": "LLM_METRIC",        "data": {"latency_ms": 983,  "total_tokens": 1594}}
+{"event": "AGENT_PARSE_ERROR", "data": {"error": "No Action found", "step": 4}}
+{"event": "LLM_METRIC",        "data": {"latency_ms": 840,  "total_tokens": 1594}}
+{"event": "AGENT_PARSE_ERROR", "data": {"error": "No Action found", "step": 5}}
+{"event": "AGENT_FINISH",      "data": {"total_steps": 5, "stopped_by": "max_iter", "answer_preview": ""}}
+```
+
+**Dấu hiệu nhận biết**: `total_tokens=1594` không đổi qua 5 steps → LLM đang trả lời giống hệt nhau, không nhận được feedback từ Observation.
+
+**Root Cause**: System prompt v1 chỉ định nghĩa `Thought → Action → Observation` nhưng **không có escape route** — LLM không biết phải dùng `Final Answer:` khi muốn từ chối.
+
+**Fix áp dụng (v2)**: Thêm rule tường minh vào system prompt:
+```
+QUAN TRỌNG: Nếu câu hỏi KHÔNG liên quan đến nhà hàng hoặc ẩm thực tại Hà Nội
+→ KHÔNG gọi bất kỳ tool nào. Trả lời ngay bằng:
+Final Answer: "Rất tiếc, tôi chỉ hỗ trợ thông tin về các nhà hàng và ẩm thực tại Hà Nội."
+```
+
+**Kết quả sau fix**: Query "sân bóng" → 1 step, `stopped_by=finish`, 0 parse errors, latency=1727ms.
+
+---
+
+### Case Study 2: Hallucinated argument — "t đói"
+
+**Input**: "t đói" (không đề cập district)
+
+**Trace từ log:**
+```json
+{"event": "TOOL_CALL", "data": {"step": 2, "tool": "search_restaurants",
+  "input": {"district": "Thanh Xuân", "min_rating": 4.0}}}
+```
+
+**Vấn đề**: Agent tự điền `district: "Thanh Xuân"` không có trong query — hallucinated từ context history session trước. Kết quả chỉ trả về 1 quán (r028) thay vì 30 quán toàn Hà Nội.
+
+**Root Cause**: `self.history` giữ lại context từ session trước → nhiễm vào Thought của session hiện tại.
+
+**Fix áp dụng (v2)**:
+```
+- Không tự suy luận district nếu user không đề cập rõ ràng.
+  Để trống để tìm toàn bộ Hà Nội.
+```
+
+---
+
+### Case Study 3: Thiếu `check_open_status` dù query có giờ cụ thể — "quán phở thanh xuân đang mở"
+
+**Input**: "quán phở thanh xuân đang mở"
+
+**Trace từ log:**
+```json
+{"event": "TOOL_CALL", "data": {"tool": "search_restaurants",
+  "input": {"cuisine": "vietnamese", "district": "Thanh Xuân"}}}
+{"event": "AGENT_FINISH", "data": {"total_steps": 2, "stopped_by": "finish"}}
+```
+
+**Vấn đề**: Agent tìm xong → trả Final Answer ngay mà không gọi `check_open_status`. Bún Chả Đắc Kim đóng lúc 15:00 nhưng agent không biết và không cảnh báo user.
+
+**Root Cause**: System prompt v1 chỉ nói "Always check opening hours if time is mentioned" nhưng không đủ mạnh để enforce.
+
+**Fix áp dụng (v2)**:
+```
+- Nếu user đề cập "đang mở", "còn mở", "mấy giờ mở", hoặc một giờ cụ thể:
+  BẮT BUỘC gọi check_open_status sau khi tìm được quán.
+```
+
+---
+
 ## 5. Ablation Studies & Experiments
 
-### Experiment 1: Prompt v1 vs Prompt v2 (xử lý out-of-scope)
+### Experiment 1: System Prompt v1 vs v2 — Out-of-scope handling
 
-- **Diff**: Thêm instruction rõ ràng vào system prompt — _"Nếu câu hỏi ngoài phạm vi Hà Nội hoặc không liên quan ẩm thực → gọi `human_escalation_fallback` ngay."_
-- **Result**: Query "quán ăn Đà Nẵng" từ loop 5 bước (`AGENT_MAX_STEPS_REACHED`) → xử lý đúng trong 2 bước. Giảm 100% lỗi loop trên loại query này.
+| | Agent v1 | Agent v2 |
+|--|---------|---------|
+| **Query** | "Gợi ý món khi ăn bún bò lần đầu?" | "Gợi ý món khi ăn bún bò lần đầu?" |
+| **Steps** | 5 (max_iter) | 1 |
+| **Parse errors** | 5 | 0 |
+| **Total tokens** | 1594 × 5 = 7970 | 1594 |
+| **Stopped by** | max_iterations | finish |
+| **Answer** | "" (rỗng) | "Rất tiếc, tôi chỉ hỗ trợ..." |
+| **Diff** | Không có escape route | Thêm `Final Answer` rule cho từ chối |
 
-### Experiment 2: Chatbot vs Agent — 5 test cases thực tế
+**Kết quả**: Giảm 100% lỗi loop, tiết kiệm 5× token trên loại query này.
 
-| Query                                                | Chatbot                                                     | Agent                                                                                    | Winner    |
-| :--------------------------------------------------- | :---------------------------------------------------------- | :--------------------------------------------------------------------------------------- | :-------- |
-| "quán ăn ngon"                                       | Trả lời chung chung, không có tên quán cụ thể               | Hỏi lại để làm rõ khu vực                                                                | Draw      |
-| "Nhà hàng Pháp Tây Hồ < 500k cho 2 người"            | Gợi ý mơ hồ, có thể hallucinate                             | Trả về đúng 2 quán từ DB (Hoa Sữa 200k, Maison de Hồ Tây 250k)                           | **Agent** |
-| "tìm quán chay tại Thanh Xuân"                       | Gợi ý quán chay chung, không xác nhận có ở Thanh Xuân không | Tìm DB → không có → thông báo rõ ràng, gợi ý tìm khu khác                                | **Agent** |
-| "tìm sân bóng"                                       | Trả lời ngoài scope nhưng vẫn gợi ý                         | Từ chối đúng scope, không hallucinate                                                    | **Agent** |
-| "quán lãng mạn đồ nhật có chỗ để xe đang mở lúc 20h" | Gợi ý 1–2 quán không có nguồn, không kiểm tra giờ           | Tìm → lọc → kiểm tra giờ mở cửa từng quán → trả về Sakura Moon & Kyoto Whisper chính xác | **Agent** |
+---
+
+### Experiment 2: Tool spec v1 vs v2 — dish_type + ambiance + amenity filter
+
+**Query**: "quán ăn lãng mạn đồ nhật có chỗ để xe đang mở lúc 20h"
+
+| | Tool v1 | Tool v2 |
+|--|---------|---------|
+| **Params có sẵn** | `cuisine, district, max_price, min_rating` | + `dish_type, ambiance, amenity` |
+| **Tool call** | `{"cuisine": "japanese"}` | `{"cuisine": "japanese", "ambiance": "romantic", "amenity": "parking"}` |
+| **Kết quả search** | Tất cả quán Nhật (4 quán, bao gồm không lãng mạn) | Chỉ quán Nhật + lãng mạn + parking (2 quán chính xác) |
+| **check_open_status** | Không gọi | Gọi đúng → xác nhận Sakura Moon OPEN 20:00 |
+| **Answer chất lượng** | Thiếu ambiance/amenity filter, không check giờ | Đúng 100% tiêu chí user yêu cầu |
+
+**Mapping mới trong system prompt v2:**
+```
+dish_type:  "phở" → "phở" | "bún chả" → "bún_chả" | "sushi" → "sushi" | "bbq" → "bbq"
+ambiance:   "lãng mạn" → "romantic" | "yên tĩnh" → "cozy_indoor" | "sang trọng" → "elegant"
+amenity:    "chỗ để xe" → "parking" | "nhạc sống" → "live_music" | "ngoài trời" → "outdoor_seating"
+```
+
+---
+
+### Experiment 3: Chatbot vs Agent — 5 test cases thực tế
+
+| Query | Chatbot | Agent v2 | Winner |
+| :---- | :------ | :------- | :----- |
+| "quán ăn ngon" | Trả lời chung chung, không có tên quán cụ thể | Hỏi lại để làm rõ khu vực | Draw |
+| "Nhà hàng Pháp Tây Hồ < 500k cho 2 người" | Gợi ý mơ hồ, có thể hallucinate | Trả về đúng 2 quán từ DB (Hoa Sữa 200k, Maison de Hồ Tây 250k) | **Agent** |
+| "tìm quán chay tại Thanh Xuân" | Gợi ý quán chay chung, không xác nhận | Tìm DB → không có → thông báo rõ, gợi ý khu khác | **Agent** |
+| "tìm sân bóng" | Trả lời ngoài scope, vẫn gợi ý | Từ chối đúng scope, 1 step, không hallucinate | **Agent** |
+| "quán lãng mạn đồ nhật có chỗ để xe đang mở lúc 20h" | Gợi ý 1–2 quán không nguồn, không check giờ | search → filter ambiance/amenity → check_open_status → Sakura Moon chính xác | **Agent** |
 
 ---
 
