@@ -15,7 +15,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# --- Custom CSS for premium look ---
+# --- Custom CSS for premium light theme ---
 st.markdown("""
 <style>
     /* Import Google Font */
@@ -25,58 +25,53 @@ st.markdown("""
         font-family: 'Inter', sans-serif;
     }
 
-    /* Main background */
+    /* Main background — warm light gradient */
     .stApp {
-        background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+        background: linear-gradient(150deg, #fdf4ff 0%, #f0f4ff 50%, #fff7ed 100%);
         min-height: 100vh;
     }
 
     /* Sidebar styling */
     [data-testid="stSidebar"] {
-        background: rgba(255, 255, 255, 0.05);
-        backdrop-filter: blur(10px);
-        border-right: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.75);
+        backdrop-filter: blur(16px);
+        border-right: 1px solid rgba(124, 58, 237, 0.12);
+        box-shadow: 4px 0 24px rgba(124, 58, 237, 0.06);
     }
 
     /* Chat message user bubble */
     [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) {
-        background: rgba(100, 80, 200, 0.2);
+        background: linear-gradient(135deg, #ede9fe, #ddd6fe);
         border-radius: 16px;
-        border: 1px solid rgba(150, 120, 255, 0.3);
+        border: 1px solid rgba(124, 58, 237, 0.2);
         padding: 8px;
         margin: 4px 0;
     }
 
     /* Chat message assistant bubble */
     [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]) {
-        background: rgba(255, 255, 255, 0.05);
+        background: white;
         border-radius: 16px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(124, 58, 237, 0.1);
+        box-shadow: 0 2px 12px rgba(124, 58, 237, 0.06);
         padding: 8px;
         margin: 4px 0;
     }
 
     /* Chat input */
     [data-testid="stChatInputTextArea"] {
-        background: rgba(255, 255, 255, 0.08) !important;
-        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        background: white !important;
+        border: 1.5px solid rgba(124, 58, 237, 0.3) !important;
         border-radius: 12px !important;
-        color: white !important;
-    }
-
-    /* Sidebar select boxes and inputs */
-    .stSelectbox > div > div {
-        background: rgba(255, 255, 255, 0.08);
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        border-radius: 8px;
     }
 
     /* Metric cards */
     [data-testid="stMetric"] {
-        background: rgba(255, 255, 255, 0.05);
+        background: white;
         border-radius: 12px;
         padding: 12px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(124, 58, 237, 0.12);
+        box-shadow: 0 2px 8px rgba(124, 58, 237, 0.06);
     }
 
     /* Header */
@@ -85,33 +80,27 @@ st.markdown("""
         padding: 20px 0 10px 0;
     }
     .main-header h1 {
-        font-size: 2.2rem;
+        font-size: 2.4rem;
         font-weight: 700;
-        background: linear-gradient(90deg, #a78bfa, #60a5fa, #34d399);
+        background: linear-gradient(90deg, #7c3aed, #f97316, #ec4899);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
     }
     .main-header p {
-        color: rgba(255,255,255,0.6);
+        color: #6b7280;
         font-size: 0.95rem;
-    }
-
-    /* Tool badge */
-    .tool-badge {
-        display: inline-block;
-        background: rgba(100, 200, 150, 0.2);
-        border: 1px solid rgba(100, 200, 150, 0.4);
-        border-radius: 20px;
-        padding: 2px 10px;
-        font-size: 0.78rem;
-        color: #6ee7b7;
-        margin: 2px;
+        margin-top: 4px;
     }
 
     /* Divider */
     hr {
-        border-color: rgba(255,255,255,0.1);
+        border-color: rgba(124, 58, 237, 0.1);
+    }
+
+    /* Section headers in sidebar */
+    h3 {
+        color: #4c1d95 !important;
     }
 </style>
 """, unsafe_allow_html=True)
