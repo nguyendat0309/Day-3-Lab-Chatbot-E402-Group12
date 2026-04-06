@@ -26,6 +26,20 @@ class IndustryLogger:
         self.logger.addHandler(file_handler)
         self.logger.addHandler(console_handler)
 
+    def log_thought(self, step: int, thought: str):
+        self.log_event("AGENT_THOUGHT", {
+            "step": step,
+            "thought": thought
+        })
+
+    def log_tool_call(self, step: int, tool: str, tool_input: dict, observation: str):
+        self.log_event("TOOL_CALL", {
+            "step": step,
+            "tool": tool,
+            "input": tool_input,
+            "observation": observation[:300]
+        })
+    
     def log_event(self, event_type: str, data: Dict[str, Any]):
         """Logs an event with a timestamp and type."""
         payload = {
@@ -40,6 +54,20 @@ class IndustryLogger:
 
     def error(self, msg: str, exc_info=True):
         self.logger.error(msg, exc_info=exc_info)
-
+    def log_tool_result(self, step: int, tool: str,
+                        success: bool, result_preview: str):
+        self.log_event("TOOL_RESULT", {
+            "step": step,
+            "tool": tool,
+            "success": success,
+            "result_preview": result_preview[:100]
+        })
+    def log_agent_finish(self, total_steps: int,
+                        stopped_by: str, answer_preview: str):
+        self.log_event("AGENT_FINISH", {
+            "total_steps": total_steps,
+            "stopped_by": stopped_by,  # "finish" | "max_iter" | "error"
+            "answer_preview": answer_preview[:100]
+        }) 
 # Global logger instance
 logger = IndustryLogger()
